@@ -5,9 +5,14 @@
 
 #include <mysql/mysql.h>
 
+//  TMP36 parameters
+#define TMP36_BIAS              500.0
+#define TMP36_SCALE_FACTOR      100.0
+
 #define CS_MCP3208  10
 
-#define SPI_CHANNEL 0
+#define SPI_CHANNEL0 0
+#define SPI_CHANNEL1 0
 #define SPI_SPEED   1000000   // 1MHz
 
 MYSQL *connector;
@@ -52,6 +57,62 @@ void writeToDB(int illuminance)
     }
 }
 
+//InfraRedRay
+int isPerson(unsigned char adcChannel) {
+    int              val;
+	val = read_mcp3208_adc(SPI_CHANNEL1);
+	if(val>1000) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+void printTemperature(unsigned char adcChannel) {
+    int              val;
+    double           dlsb;
+    double           degC;
+    double           degF;
+    double           fVal;
+    double           fdegC;
+    double           fdegF;
+    short            bInit = 1;
+	
+	//  define the parameters we will use to perform conversions
+    //  this is the MCP3002 which has power of 3.3V and 10 bit A/D
+    //  so value of the lsb is voltage range / maximum value
+    dlsb = 3300 / 1023.0;
+
+    //  loop forever polling the temperature
+    //for (;;)
+    //{
+        val = read_mcp3208_adc(SPI_CHANNEL1);
+        degC = ((double) val * dlsb - TMP36_BIAS) / TMP36_SCALE_FACTOR;
+        degF = degC * 9.0 / 5.0 + 32.0;
+
+        //  implement a leaky bucket integrator to smooth the data, although
+        //  for this sensore it already appears quite stable. If the initialize
+        //  flag is set, initialize the filtered value to the input value and
+        //  clear the initialize flag
+        if (bInit)
+        {
+            fVal = (double) val;
+            bInit = 0;
+        }
+
+        //  for this leaky bucket integrator we have chosen 0.875 * filtered value +
+        //  0.125 * raw value
+        fVal = 7.0 * fVal / 8.0 + (double) val / 8.0;
+        fdegC = (fVal * dlsb - TMP36_BIAS) / TMP36_SCALE_FACTOR;
+        fdegF = fdegC  * 9.0 / 5.0 + 32.0;
+        printf("Tmp36 - Value: %d, Deg C: %lf, Deg F: %lf, Filtered Deg C: %lf, Deg F: %lf\n",
+               val, degC, degF, fdegC, fdegF);
+
+        //  sleep until next sample time
+        //sleep(5);
+    //}
+}
+
 int main (void)
 {
 	int gas = 0;
@@ -67,7 +128,7 @@ int main (void)
     return 1 ;
   }
   
-  if(wiringPiSPISetup(SPI_CHANNEL, SPI_SPEED) == -1)
+  if(wiringPiSPISetup(SPI_CHANNEL0, SPI_SPEED) == -1 || wiringPiSPISetup(SPI_CHANNEL1, SPI_SPEED) == -1)
   {
     fprintf (stdout, "wiringPiSPISetup Failed: %s\n", strerror(errno));
     return 1 ;
