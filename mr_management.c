@@ -28,7 +28,7 @@ int read_mcp3208_adc(unsigned char adcChannel)
 
   digitalWrite(CS_MCP3208, 0);  // Low : CS Active
 
-  wiringPiSPIDataRW(SPI_CHANNEL, buff, 3);
+  wiringPiSPIDataRW(adcChannel, buff, 3);
 
   buff[1] = 0x0F & buff[1];
   adcValue = ( buff[1] << 8) | buff[2];
